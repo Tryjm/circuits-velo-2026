@@ -1,7 +1,10 @@
 let allRoutes = [];
-let map = L.map('map');
+let selectedFile = null;
 let currentLine = null;
-const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+const gpxCache = new Map();
+
+const map = L.map('map', { tap: true });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
   attribution: '&copy; OpenStreetMap'
 }).addTo(map);
@@ -15,15 +18,23 @@ async function init(){
   const res = await fetch('parcours.json');
   allRoutes = await res.json();
   populateMonths();
+  populateQuickDates();
   renderStats();
   bindFilters();
-  renderList();
-  if(allRoutes.length) selectRoute(allRoutes[0].file);
+  renderList(true);
+  if(allRoutes.length) selectRoute(allRoutes[0].file, {scrollToDetail:false});
 }
 
 function populateMonths(){
   const months = [...new Set(allRoutes.map(r => r.date ? Number(r.date.slice(5,7)) : null).filter(Boolean))].sort((a,b)=>a-b);
   el('month').insertAdjacentHTML('beforeend', months.map(m => `<option value="${String(m).padStart(2,'0')}">${monthNames[m-1]}</option>`).join(''));
+}
+
+function populateQuickDates(){
+  const options = [...allRoutes].sort((a,b)=>a.date.localeCompare(b.date)).map(r =>
+    `<option value="${escapeHtml(r.file)}">${r.date_fr} — ${r.distance_km.toFixed(1).replace('.', ',')} km / ${fmt.format(r.elevation_m)} m D+</option>`
+  ).join('');
+  el('quickDate').insertAdjacentHTML('beforeend', options);
 }
 
 function renderStats(){
@@ -36,16 +47,34 @@ function renderStats(){
 }
 
 function bindFilters(){
-  ['search','month','minKm','minElev','sort'].forEach(id => el(id).addEventListener('input', renderList));
+  ['search','month','minKm','minElev','sort'].forEach(id => el(id).addEventListener('input', () => renderList(true)));
+  el('quickDate').addEventListener('change', e => {
+    if(!e.target.value) return;
+    clearTextFilters();
+    renderList(false);
+    selectRoute(e.target.value, {scrollToDetail:true});
+  });
+}
+
+function clearTextFilters(){
+  el('search').value = '';
+  el('month').value = '';
+  el('minKm').value = '';
+  el('minElev').value = '';
+  el('sort').value = 'date';
+}
+
+function normalize(str){
+  return String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function filteredRoutes(){
-  const q = el('search').value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const q = normalize(el('search').value);
   const month = el('month').value;
   const minKm = Number(el('minKm').value || 0);
   const minElev = Number(el('minElev').value || 0);
   let routes = allRoutes.filter(r => {
-    const hay = `${r.date_fr} ${r.title} ${r.source_filename}`.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const hay = normalize(`${r.date_fr} ${r.date} ${r.title} ${r.source_filename}`);
     return (!q || hay.includes(q)) && (!month || r.date.slice(5,7) === month) && r.distance_km >= minKm && r.elevation_m >= minElev;
   });
   const sort = el('sort').value;
@@ -58,11 +87,11 @@ function filteredRoutes(){
   return routes;
 }
 
-function renderList(){
+function renderList(autoSelectFirst=false){
   const routes = filteredRoutes();
   el('count').textContent = `${routes.length} résultat${routes.length>1?'s':''}`;
   el('routes').innerHTML = routes.map(r => `
-    <button class="route-card" data-file="${r.file}">
+    <button class="route-card${r.file === selectedFile ? ' active' : ''}" data-file="${escapeHtml(r.file)}">
       <div class="route-title">${escapeHtml(r.title)}</div>
       <div class="route-meta">
         <span class="badge">${r.date_fr}</span>
@@ -70,18 +99,21 @@ function renderList(){
         <span class="badge">${fmt.format(r.elevation_m)} m D+</span>
       </div>
     </button>`).join('') || '<p>Aucun parcours ne correspond aux filtres.</p>';
-  document.querySelectorAll('.route-card').forEach(btn => btn.addEventListener('click', () => selectRoute(btn.dataset.file)));
+
+  document.querySelectorAll('.route-card').forEach(btn => btn.addEventListener('click', () => selectRoute(btn.dataset.file, {scrollToDetail: window.matchMedia('(max-width: 820px)').matches})));
+
+  if(autoSelectFirst && routes.length && !routes.some(r => r.file === selectedFile)) {
+    selectRoute(routes[0].file, {scrollToDetail:false});
+  }
 }
 
-async function selectRoute(file){
+async function selectRoute(file, options={scrollToDetail:false}){
   const route = allRoutes.find(r => r.file === file);
   if(!route) return;
+  selectedFile = file;
+  el('quickDate').value = file;
   document.querySelectorAll('.route-card').forEach(b => b.classList.toggle('active', b.dataset.file === file));
-  const xmlText = await fetch(file).then(r => r.text());
-  const pts = parseGpxPoints(xmlText);
-  if(currentLine) map.removeLayer(currentLine);
-  currentLine = L.polyline(pts, {weight: 5}).addTo(map);
-  map.fitBounds(currentLine.getBounds(), {padding:[24,24]});
+
   el('details').className = 'details';
   el('details').innerHTML = `
     <h2>${escapeHtml(route.title)}</h2>
@@ -96,11 +128,34 @@ async function selectRoute(file){
       <a class="btn" href="${route.file}" download>Télécharger le GPX</a>
       <a class="btn secondary" href="${route.file}" target="_blank" rel="noopener">Ouvrir le fichier</a>
     </div>`;
+
+  const pts = await getGpxPoints(route.file);
+  if(currentLine) map.removeLayer(currentLine);
+  if(pts.length){
+    currentLine = L.polyline(pts, {weight: 5}).addTo(map);
+    map.fitBounds(currentLine.getBounds(), {padding:[24,24]});
+  }
+  setTimeout(() => map.invalidateSize(), 100);
+  if(options.scrollToDetail){
+    document.querySelector('.detail').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+}
+
+async function getGpxPoints(file){
+  if(gpxCache.has(file)) return gpxCache.get(file);
+  const xmlText = await fetch(file).then(r => r.text());
+  const pts = parseGpxPoints(xmlText);
+  gpxCache.set(file, pts);
+  return pts;
 }
 
 function parseGpxPoints(xmlText){
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
   return [...doc.getElementsByTagName('trkpt')].map(p => [Number(p.getAttribute('lat')), Number(p.getAttribute('lon'))]);
 }
-function escapeHtml(str){return String(str).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+}
+
 init();
