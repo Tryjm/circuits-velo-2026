@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Circuits vélo club 2026</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQWvX6fJA0F/En4G+P1xLXvaG1f7dXg=" crossorigin="">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +11,7 @@
     <div>
       <p class="eyebrow">Club vélo</p>
       <h1>Circuits GPX 2026</h1>
-      <p class="subtitle">Recherche par date, distance ou dénivelé, visualisation de la trace et téléchargement du GPX.</p>
+      <p class="subtitle">Recherche par date, distance ou dénivelé, aperçu rapide du tracé et téléchargement du GPX.</p>
     </div>
     <div class="stats" id="stats" aria-label="Statistiques globales"></div>
   </header>
@@ -51,17 +50,15 @@
       </aside>
 
       <section class="panel detail">
-        <div id="details" class="details-empty">Sélectionne un parcours pour afficher ses données et sa trace.</div>
-        <div id="map" aria-label="Carte du parcours sélectionné"></div>
+        <div id="details" class="details-empty">Sélectionne un parcours pour afficher ses données et son aperçu.</div>
       </section>
     </section>
   </main>
 
   <footer>
-    Page statique prête pour GitHub Pages — données générées à partir des fichiers GPX.
+    Page statique prête pour GitHub Pages — aperçu optimisé mobile, sans chargement de tuiles de carte.
   </footer>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="script.js"></script>
 </body>
 </html>

@@ -1,14 +1,5 @@
 let allRoutes = [];
 let selectedFile = null;
-let currentLine = null;
-const gpxCache = new Map();
-
-const map = L.map('map', { tap: true });
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; OpenStreetMap'
-}).addTo(map);
-map.setView([47.2972, -1.4918], 10);
 
 const el = id => document.getElementById(id);
 const fmt = new Intl.NumberFormat('fr-FR');
@@ -65,7 +56,7 @@ function clearTextFilters(){
 }
 
 function normalize(str){
-  return String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return String(str || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
 function filteredRoutes(){
@@ -107,7 +98,7 @@ function renderList(autoSelectFirst=false){
   }
 }
 
-async function selectRoute(file, options={scrollToDetail:false}){
+function selectRoute(file, options={scrollToDetail:false}){
   const route = allRoutes.find(r => r.file === file);
   if(!route) return;
   selectedFile = file;
@@ -127,31 +118,58 @@ async function selectRoute(file, options={scrollToDetail:false}){
     <div class="actions">
       <a class="btn" href="${route.file}" download>Télécharger le GPX</a>
       <a class="btn secondary" href="${route.file}" target="_blank" rel="noopener">Ouvrir le fichier</a>
-    </div>`;
+    </div>
+    ${routePreviewHtml(route)}
+    ${profileHtml(route)}
+    <p class="note">Aperçu simplifié : la page n'affiche plus les tuiles OpenStreetMap pour rester rapide sur téléphone. Le GPX complet reste disponible au téléchargement.</p>`;
 
-  const pts = await getGpxPoints(route.file);
-  if(currentLine) map.removeLayer(currentLine);
-  if(pts.length){
-    currentLine = L.polyline(pts, {weight: 5}).addTo(map);
-    map.fitBounds(currentLine.getBounds(), {padding:[24,24]});
-  }
-  setTimeout(() => map.invalidateSize(), 100);
   if(options.scrollToDetail){
     document.querySelector('.detail').scrollIntoView({behavior:'smooth', block:'start'});
   }
 }
 
-async function getGpxPoints(file){
-  if(gpxCache.has(file)) return gpxCache.get(file);
-  const xmlText = await fetch(file).then(r => r.text());
-  const pts = parseGpxPoints(xmlText);
-  gpxCache.set(file, pts);
-  return pts;
+function routePreviewHtml(route){
+  const pts = route.preview && route.preview.points ? route.preview.points : [];
+  if(!pts.length) return '';
+  const poly = pointsToString(pts);
+  const start = pts[0];
+  const end = pts[pts.length-1];
+  return `
+    <div class="visual-card" aria-label="Aperçu simplifié du circuit">
+      <div class="visual-head"><h3>Aperçu du circuit</h3><span>tracé simplifié, sans fond de carte</span></div>
+      <svg class="preview-svg" viewBox="0 0 1000 1000" role="img" aria-label="Aperçu du tracé ${escapeHtml(route.title)}" preserveAspectRatio="xMidYMid meet">
+        <polyline class="route-shadow" points="${poly}" vector-effect="non-scaling-stroke"></polyline>
+        <polyline class="route-line" points="${poly}" vector-effect="non-scaling-stroke"></polyline>
+        <circle class="start-dot" cx="${start[0]}" cy="${start[1]}" r="28" vector-effect="non-scaling-stroke"><title>Départ</title></circle>
+        <circle class="end-dot" cx="${end[0]}" cy="${end[1]}" r="28" vector-effect="non-scaling-stroke"><title>Arrivée</title></circle>
+      </svg>
+    </div>`;
 }
 
-function parseGpxPoints(xmlText){
-  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
-  return [...doc.getElementsByTagName('trkpt')].map(p => [Number(p.getAttribute('lat')), Number(p.getAttribute('lon'))]);
+function profileHtml(route){
+  const profile = route.profile;
+  const pts = profile && profile.points ? profile.points : [];
+  if(!pts.length) return '';
+  const line = pointsToString(pts);
+  const area = `0,1000 ${line} 1000,1000`;
+  const min = profile.min_m ?? 0;
+  const max = profile.max_m ?? 0;
+  return `
+    <div class="visual-card" aria-label="Profil altimétrique du circuit">
+      <div class="visual-head"><h3>Profil du circuit</h3><span>altitude approximative</span></div>
+      <svg class="profile-svg" viewBox="0 0 1000 1000" role="img" aria-label="Profil altimétrique ${escapeHtml(route.title)}" preserveAspectRatio="none">
+        <line class="profile-grid" x1="0" y1="250" x2="1000" y2="250"></line>
+        <line class="profile-grid" x1="0" y1="500" x2="1000" y2="500"></line>
+        <line class="profile-grid" x1="0" y1="750" x2="1000" y2="750"></line>
+        <polygon class="profile-area" points="${area}"></polygon>
+        <polyline class="profile-line" points="${line}" vector-effect="non-scaling-stroke"></polyline>
+      </svg>
+      <div class="profile-labels"><span>${fmt.format(min)} m</span><span>${fmt.format(max)} m</span></div>
+    </div>`;
+}
+
+function pointsToString(points){
+  return points.map(p => `${p[0]},${p[1]}`).join(' ');
 }
 
 function escapeHtml(str){

@@ -1,27 +1,18 @@
-# Circuits vélo club 2026
+# Circuits vélo club 2026 — version mobile allégée
 
-Site statique prêt pour GitHub Pages.
+Cette version est optimisée pour les téléphones :
 
-## Contenu
+- plus de chargement Leaflet / OpenStreetMap ;
+- aperçu simplifié du circuit en SVG ;
+- profil altimétrique sous l'aperçu ;
+- données du parcours au-dessus de l'aperçu ;
+- téléchargement du GPX complet conservé.
 
-- `index.html` : page principale
-- `style.css` : mise en forme
-- `script.js` : filtres, carte et lecture GPX
-- `parcours.json` : catalogue généré automatiquement depuis les GPX
-- `gpx/` : fichiers GPX téléchargeables
+Pour mettre à jour GitHub Pages, remplacer au minimum :
 
-## Mise en ligne sur GitHub Pages
+- `index.html`
+- `style.css`
+- `script.js`
+- `parcours.json`
 
-1. Créer un nouveau dépôt GitHub, par exemple `circuits-velo-2026`.
-2. Déposer tous les fichiers de ce dossier à la racine du dépôt.
-3. Dans GitHub : `Settings` > `Pages`.
-4. Dans `Build and deployment`, choisir :
-   - Source : `Deploy from a branch`
-   - Branch : `main`
-   - Folder : `/root`
-5. Valider. L'adresse du site sera affichée après quelques instants.
-
-## Mise à jour avec de nouveaux GPX
-
-Ajouter les nouveaux fichiers dans le dossier `gpx/`, puis mettre à jour `parcours.json`.
-Pour une mise à jour automatique complète, il faudra relancer un petit script Python de génération.
+Le dossier `gpx/` peut rester identique si les fichiers GPX n'ont pas changé.
