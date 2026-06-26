@@ -5,14 +5,17 @@ let currentLine = null;
 let startMarker = null;
 let endMarker = null;
 let baseLayerControl = null;
+let activeTileLayer = null;
+let tileWatchdog = null;
 
 const el = id => document.getElementById(id);
 const fmt = new Intl.NumberFormat('fr-FR');
 const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const isSmallScreen = () => window.matchMedia('(max-width: 820px)').matches;
+const DEFAULT_CENTER = [47.2972, -1.4918];
 
 async function init(){
-  const res = await fetch('parcours.json');
+  const res = await fetch('parcours.json', {cache: 'force-cache'});
   allRoutes = await res.json();
   populateMonths();
   populateQuickDates();
@@ -128,99 +131,200 @@ function selectRoute(file, options={scrollToDetail:false}){
 
   el('profileArea').innerHTML = profileHtml(route);
   el('mapCard').hidden = false;
-  updateMap(route);
+  scheduleMapUpdate(route);
 
   if(options.scrollToDetail){
     document.querySelector('.detail').scrollIntoView({behavior:'smooth', block:'start'});
   }
 }
 
+function createFastTileLayer(){
+  return L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+    subdomains: 'abcd',
+    maxZoom: 19,
+    maxNativeZoom: 18,
+    tileSize: 512,
+    zoomOffset: -1,
+    detectRetina: false,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
+    keepBuffer: isSmallScreen() ? 0 : 1,
+    crossOrigin: true,
+    attribution: '&copy; OpenStreetMap &copy; CARTO'
+  });
+}
+
+function createOsmTileLayer(){
+  return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    maxNativeZoom: 18,
+    tileSize: 512,
+    zoomOffset: -1,
+    detectRetina: false,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
+    keepBuffer: isSmallScreen() ? 0 : 1,
+    crossOrigin: true,
+    attribution: '&copy; OpenStreetMap'
+  });
+}
+
 function ensureMap(){
   if(map) return map;
   map = L.map('map', {
     preferCanvas: true,
+    renderer: L.canvas({padding: 0.35}),
     tap: true,
     zoomControl: !isSmallScreen(),
     scrollWheelZoom: false,
+    doubleClickZoom: false,
+    boxZoom: false,
+    keyboard: false,
+    fadeAnimation: false,
+    zoomAnimation: false,
+    markerZoomAnimation: false,
     attributionControl: true
   });
 
-  const plan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18,
-    detectRetina: false,
-    updateWhenIdle: true,
-    keepBuffer: 1,
-    attribution: '&copy; OpenStreetMap'
+  const fast = createFastTileLayer();
+  const osm = createOsmTileLayer();
+  activeTileLayer = fast.addTo(map);
+  watchTileLoading(activeTileLayer);
+
+  baseLayerControl = L.control.layers({ 'Fond clair rapide': fast, 'OpenStreetMap': osm }, null, { position: 'bottomright', collapsed: true }).addTo(map);
+  map.on('baselayerchange', e => {
+    activeTileLayer = e.layer;
+    el('mapMode').textContent = e.name === 'OpenStreetMap' ? 'fond OpenStreetMap · tracé simplifié' : 'fond clair rapide · tracé simplifié';
+    watchTileLoading(activeTileLayer);
   });
 
-  const relief = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-    maxZoom: 17,
-    detectRetina: false,
-    updateWhenIdle: true,
-    keepBuffer: 1,
-    attribution: '&copy; OpenTopoMap &copy; OpenStreetMap'
-  });
-
-  plan.addTo(map);
-  baseLayerControl = L.control.layers({ 'Plan': plan, 'Relief': relief }, null, { position: 'bottomright', collapsed: true }).addTo(map);
-  map.setView([47.2972, -1.4918], 10);
+  map.setView(DEFAULT_CENTER, 9, {animate:false});
   return map;
+}
+
+function watchTileLoading(layer){
+  if(!layer) return;
+  const status = el('mapStatus');
+  if(!status) return;
+  status.classList.remove('hidden');
+  status.textContent = 'Chargement du fond de carte…';
+  clearTimeout(tileWatchdog);
+  tileWatchdog = setTimeout(() => {
+    status.textContent = 'Fond de carte partiellement chargé — le tracé reste disponible.';
+    setTimeout(() => status.classList.add('hidden'), 1600);
+  }, 2600);
+  layer.once('load', () => {
+    clearTimeout(tileWatchdog);
+    status.textContent = 'Carte chargée';
+    setTimeout(() => status.classList.add('hidden'), 500);
+  });
+  layer.once('tileerror', () => {
+    status.textContent = 'Certaines tuiles sont lentes à charger.';
+    setTimeout(() => status.classList.add('hidden'), 1800);
+  });
+}
+
+function scheduleMapUpdate(route){
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => updateMap(route));
+  });
 }
 
 function updateMap(route){
   const pts = route.map_points || [];
   const m = ensureMap();
+  m.invalidateSize({animate:false});
+
   if(currentLine) currentLine.remove();
   if(startMarker) startMarker.remove();
   if(endMarker) endMarker.remove();
 
   if(!pts.length){
-    m.setView([route.start_lat || 47.2972, route.start_lon || -1.4918], 11);
-    setTimeout(() => m.invalidateSize(), 80);
+    m.setView([route.start_lat || DEFAULT_CENTER[0], route.start_lon || DEFAULT_CENTER[1]], 10, {animate:false});
+    setTimeout(() => m.invalidateSize({animate:false}), 80);
     return;
   }
 
   currentLine = L.polyline(pts, {
-    weight: isSmallScreen() ? 4 : 5,
-    opacity: 0.95,
+    weight: isSmallScreen() ? 3.5 : 4.5,
+    opacity: 0.98,
+    color: '#0b6fae',
     lineCap: 'round',
-    lineJoin: 'round'
+    lineJoin: 'round',
+    smoothFactor: 1.4,
+    interactive: false
   }).addTo(m);
 
   const start = pts[0];
   const end = pts[pts.length - 1];
-  startMarker = L.circleMarker(start, {radius: 5, weight: 2, fillOpacity: 1}).addTo(m).bindTooltip('Départ');
-  endMarker = L.circleMarker(end, {radius: 5, weight: 2, fillOpacity: 1}).addTo(m).bindTooltip('Arrivée');
+  startMarker = L.circleMarker(start, {radius: isSmallScreen() ? 4 : 5, weight: 2, color:'#ffffff', fillColor:'#1c8f5a', fillOpacity:1}).addTo(m).bindTooltip('Départ');
+  endMarker = L.circleMarker(end, {radius: isSmallScreen() ? 4 : 5, weight: 2, color:'#ffffff', fillColor:'#c2410c', fillOpacity:1}).addTo(m).bindTooltip('Arrivée');
 
-  const maxZoom = isSmallScreen() ? 12 : 13;
-  m.fitBounds(currentLine.getBounds(), {padding:[14,14], maxZoom});
-  setTimeout(() => m.invalidateSize(), 100);
+  const maxZoom = isSmallScreen() ? 10 : 11;
+  const bounds = currentLine.getBounds().pad(0.10);
+  m.fitBounds(bounds, {padding:[18,18], maxZoom, animate:false});
+  setTimeout(() => {
+    m.invalidateSize({animate:false});
+    activeTileLayer?.redraw();
+  }, 120);
 }
 
 function profileHtml(route){
   const profile = route.profile;
   const pts = profile && profile.points ? profile.points : [];
   if(!pts.length) return '';
-  const line = pointsToString(pts);
-  const area = `0,1000 ${line} 1000,1000`;
+  const linePath = smoothPath(pts);
+  const areaPath = `${linePath} L1000,1000 L0,1000 Z`;
   const min = profile.min_m ?? 0;
   const max = profile.max_m ?? 0;
   return `
     <div class="visual-card profile-card" aria-label="Profil altimétrique du circuit">
       <div class="visual-head"><h3>Profil du circuit</h3><span>D+ ${fmt.format(route.elevation_m)} m · ${fmt.format(min)} à ${fmt.format(max)} m</span></div>
       <svg class="profile-svg" viewBox="0 0 1000 1000" role="img" aria-label="Profil altimétrique ${escapeHtml(route.title)}" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="profileFill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#2b83ba" stop-opacity="0.22"></stop>
+            <stop offset="70%" stop-color="#2b83ba" stop-opacity="0.07"></stop>
+            <stop offset="100%" stop-color="#2b83ba" stop-opacity="0"></stop>
+          </linearGradient>
+          <linearGradient id="profileStroke" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stop-color="#166a9a"></stop>
+            <stop offset="55%" stop-color="#2b83ba"></stop>
+            <stop offset="100%" stop-color="#0f5f8e"></stop>
+          </linearGradient>
+        </defs>
         <line class="profile-grid" x1="0" y1="250" x2="1000" y2="250"></line>
         <line class="profile-grid" x1="0" y1="500" x2="1000" y2="500"></line>
         <line class="profile-grid" x1="0" y1="750" x2="1000" y2="750"></line>
-        <polygon class="profile-area" points="${area}"></polygon>
-        <polyline class="profile-line" points="${line}" vector-effect="non-scaling-stroke"></polyline>
+        <path class="profile-area" d="${areaPath}"></path>
+        <path class="profile-line" d="${linePath}" vector-effect="non-scaling-stroke"></path>
+        <circle class="profile-dot start" cx="${pts[0][0]}" cy="${pts[0][1]}" r="10" vector-effect="non-scaling-stroke"></circle>
+        <circle class="profile-dot end" cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="10" vector-effect="non-scaling-stroke"></circle>
       </svg>
       <div class="profile-labels"><span>${fmt.format(min)} m</span><span>${fmt.format(max)} m</span></div>
     </div>`;
 }
 
-function pointsToString(points){
-  return points.map(p => `${p[0]},${p[1]}`).join(' ');
+function smoothPath(points){
+  if(points.length < 2) return '';
+  const p = points;
+  let d = `M${p[0][0]},${p[0][1]}`;
+  for(let i=0; i<p.length-1; i++){
+    const p0 = p[i-1] || p[i];
+    const p1 = p[i];
+    const p2 = p[i+1];
+    const p3 = p[i+2] || p2;
+    const c1x = p1[0] + (p2[0]-p0[0]) / 6;
+    const c1y = p1[1] + (p2[1]-p0[1]) / 6;
+    const c2x = p2[0] - (p3[0]-p1[0]) / 6;
+    const c2y = p2[1] - (p3[1]-p1[1]) / 6;
+    d += ` C${round(c1x)},${round(c1y)} ${round(c2x)},${round(c2y)} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+
+function round(n){
+  return Math.round(n * 10) / 10;
 }
 
 function escapeHtml(str){

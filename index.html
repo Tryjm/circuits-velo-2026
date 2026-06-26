@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Circuits vélo club 2026</title>
+  <link rel="preconnect" href="https://a.basemaps.cartocdn.com">
+  <link rel="preconnect" href="https://b.basemaps.cartocdn.com">
+  <link rel="preconnect" href="https://c.basemaps.cartocdn.com">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQvW6fJA0F/En4G+P1xLXvaG1f7dXg=" crossorigin="">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -54,8 +57,11 @@
         <div id="details" class="details-empty">Sélectionne un parcours pour afficher ses données, son dénivelé et sa carte.</div>
         <div id="profileArea"></div>
         <div class="map-card" id="mapCard" hidden>
-          <div class="visual-head"><h3>Carte du circuit</h3><span>fond OpenStreetMap, tracé simplifié</span></div>
-          <div id="map" aria-label="Carte du parcours sélectionné"></div>
+          <div class="visual-head"><h3>Carte du circuit</h3><span id="mapMode">fond clair rapide · tracé simplifié</span></div>
+          <div class="map-shell">
+            <div id="map" aria-label="Carte du parcours sélectionné"></div>
+            <div id="mapStatus" class="map-status" aria-live="polite">Chargement du fond de carte…</div>
+          </div>
         </div>
       </section>
     </section>
