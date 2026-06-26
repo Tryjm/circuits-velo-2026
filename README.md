@@ -1,18 +1,11 @@
-# Circuits vélo club 2026 — version mobile allégée
+# Circuits vélo club 2026
 
-Cette version est optimisée pour les téléphones :
+Version optimisée mobile avec :
 
-- plus de chargement Leaflet / OpenStreetMap ;
-- aperçu simplifié du circuit en SVG ;
-- profil altimétrique sous l'aperçu ;
-- données du parcours au-dessus de l'aperçu ;
+- données du parcours au-dessus ;
+- profil altimétrique au-dessus de la carte ;
+- carte Leaflet avec fond OpenStreetMap et option relief ;
+- tracé de carte simplifié dans `parcours.json` pour éviter de charger le GPX complet à l'affichage ;
 - téléchargement du GPX complet conservé.
 
-Pour mettre à jour GitHub Pages, remplacer au minimum :
-
-- `index.html`
-- `style.css`
-- `script.js`
-- `parcours.json`
-
-Le dossier `gpx/` peut rester identique si les fichiers GPX n'ont pas changé.
+Pour GitHub Pages, publier la branche `main` depuis `/ (root)`.

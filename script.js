@@ -1,9 +1,15 @@
 let allRoutes = [];
 let selectedFile = null;
+let map = null;
+let currentLine = null;
+let startMarker = null;
+let endMarker = null;
+let baseLayerControl = null;
 
 const el = id => document.getElementById(id);
 const fmt = new Intl.NumberFormat('fr-FR');
 const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const isSmallScreen = () => window.matchMedia('(max-width: 820px)').matches;
 
 async function init(){
   const res = await fetch('parcours.json');
@@ -56,7 +62,7 @@ function clearTextFilters(){
 }
 
 function normalize(str){
-  return String(str || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function filteredRoutes(){
@@ -91,7 +97,7 @@ function renderList(autoSelectFirst=false){
       </div>
     </button>`).join('') || '<p>Aucun parcours ne correspond aux filtres.</p>';
 
-  document.querySelectorAll('.route-card').forEach(btn => btn.addEventListener('click', () => selectRoute(btn.dataset.file, {scrollToDetail: window.matchMedia('(max-width: 820px)').matches})));
+  document.querySelectorAll('.route-card').forEach(btn => btn.addEventListener('click', () => selectRoute(btn.dataset.file, {scrollToDetail: isSmallScreen()})));
 
   if(autoSelectFirst && routes.length && !routes.some(r => r.file === selectedFile)) {
     selectRoute(routes[0].file, {scrollToDetail:false});
@@ -118,32 +124,77 @@ function selectRoute(file, options={scrollToDetail:false}){
     <div class="actions">
       <a class="btn" href="${route.file}" download>Télécharger le GPX</a>
       <a class="btn secondary" href="${route.file}" target="_blank" rel="noopener">Ouvrir le fichier</a>
-    </div>
-    ${routePreviewHtml(route)}
-    ${profileHtml(route)}
-    <p class="note">Aperçu simplifié : la page n'affiche plus les tuiles OpenStreetMap pour rester rapide sur téléphone. Le GPX complet reste disponible au téléchargement.</p>`;
+    </div>`;
+
+  el('profileArea').innerHTML = profileHtml(route);
+  el('mapCard').hidden = false;
+  updateMap(route);
 
   if(options.scrollToDetail){
     document.querySelector('.detail').scrollIntoView({behavior:'smooth', block:'start'});
   }
 }
 
-function routePreviewHtml(route){
-  const pts = route.preview && route.preview.points ? route.preview.points : [];
-  if(!pts.length) return '';
-  const poly = pointsToString(pts);
+function ensureMap(){
+  if(map) return map;
+  map = L.map('map', {
+    preferCanvas: true,
+    tap: true,
+    zoomControl: !isSmallScreen(),
+    scrollWheelZoom: false,
+    attributionControl: true
+  });
+
+  const plan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    detectRetina: false,
+    updateWhenIdle: true,
+    keepBuffer: 1,
+    attribution: '&copy; OpenStreetMap'
+  });
+
+  const relief = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    maxZoom: 17,
+    detectRetina: false,
+    updateWhenIdle: true,
+    keepBuffer: 1,
+    attribution: '&copy; OpenTopoMap &copy; OpenStreetMap'
+  });
+
+  plan.addTo(map);
+  baseLayerControl = L.control.layers({ 'Plan': plan, 'Relief': relief }, null, { position: 'bottomright', collapsed: true }).addTo(map);
+  map.setView([47.2972, -1.4918], 10);
+  return map;
+}
+
+function updateMap(route){
+  const pts = route.map_points || [];
+  const m = ensureMap();
+  if(currentLine) currentLine.remove();
+  if(startMarker) startMarker.remove();
+  if(endMarker) endMarker.remove();
+
+  if(!pts.length){
+    m.setView([route.start_lat || 47.2972, route.start_lon || -1.4918], 11);
+    setTimeout(() => m.invalidateSize(), 80);
+    return;
+  }
+
+  currentLine = L.polyline(pts, {
+    weight: isSmallScreen() ? 4 : 5,
+    opacity: 0.95,
+    lineCap: 'round',
+    lineJoin: 'round'
+  }).addTo(m);
+
   const start = pts[0];
-  const end = pts[pts.length-1];
-  return `
-    <div class="visual-card" aria-label="Aperçu simplifié du circuit">
-      <div class="visual-head"><h3>Aperçu du circuit</h3><span>tracé simplifié, sans fond de carte</span></div>
-      <svg class="preview-svg" viewBox="0 0 1000 1000" role="img" aria-label="Aperçu du tracé ${escapeHtml(route.title)}" preserveAspectRatio="xMidYMid meet">
-        <polyline class="route-shadow" points="${poly}" vector-effect="non-scaling-stroke"></polyline>
-        <polyline class="route-line" points="${poly}" vector-effect="non-scaling-stroke"></polyline>
-        <circle class="start-dot" cx="${start[0]}" cy="${start[1]}" r="28" vector-effect="non-scaling-stroke"><title>Départ</title></circle>
-        <circle class="end-dot" cx="${end[0]}" cy="${end[1]}" r="28" vector-effect="non-scaling-stroke"><title>Arrivée</title></circle>
-      </svg>
-    </div>`;
+  const end = pts[pts.length - 1];
+  startMarker = L.circleMarker(start, {radius: 5, weight: 2, fillOpacity: 1}).addTo(m).bindTooltip('Départ');
+  endMarker = L.circleMarker(end, {radius: 5, weight: 2, fillOpacity: 1}).addTo(m).bindTooltip('Arrivée');
+
+  const maxZoom = isSmallScreen() ? 12 : 13;
+  m.fitBounds(currentLine.getBounds(), {padding:[14,14], maxZoom});
+  setTimeout(() => m.invalidateSize(), 100);
 }
 
 function profileHtml(route){
@@ -155,8 +206,8 @@ function profileHtml(route){
   const min = profile.min_m ?? 0;
   const max = profile.max_m ?? 0;
   return `
-    <div class="visual-card" aria-label="Profil altimétrique du circuit">
-      <div class="visual-head"><h3>Profil du circuit</h3><span>altitude approximative</span></div>
+    <div class="visual-card profile-card" aria-label="Profil altimétrique du circuit">
+      <div class="visual-head"><h3>Profil du circuit</h3><span>D+ ${fmt.format(route.elevation_m)} m · ${fmt.format(min)} à ${fmt.format(max)} m</span></div>
       <svg class="profile-svg" viewBox="0 0 1000 1000" role="img" aria-label="Profil altimétrique ${escapeHtml(route.title)}" preserveAspectRatio="none">
         <line class="profile-grid" x1="0" y1="250" x2="1000" y2="250"></line>
         <line class="profile-grid" x1="0" y1="500" x2="1000" y2="500"></line>
