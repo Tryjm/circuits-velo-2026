@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Circuits vélo club 2026</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQWvX6fJA0F/En4G+P1xLXvaG1f7dXg=" crossorigin="">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">Club vélo</p>
+      <h1>Circuits GPX 2026</h1>
+      <p class="subtitle">Retrouver un parcours par date, distance ou dénivelé, visualiser la trace et télécharger le GPX.</p>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <main>
+    <section class="panel filters" aria-label="Filtres de recherche">
+      <label>Recherche
+        <input id="search" type="search" placeholder="date, mois, nom du parcours…">
+      </label>
+      <label>Mois
+        <select id="month"><option value="">Tous les mois</option></select>
+      </label>
+      <label>Distance mini
+        <input id="minKm" type="number" min="0" step="5" placeholder="km">
+      </label>
+      <label>D+ mini
+        <input id="minElev" type="number" min="0" step="50" placeholder="m">
+      </label>
+      <label>Tri
+        <select id="sort">
+          <option value="date">Date</option>
+          <option value="distance_desc">Distance décroissante</option>
+          <option value="elevation_desc">D+ décroissant</option>
+          <option value="title">Nom</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="grid">
+      <aside class="panel list">
+        <div class="list-header"><h2>Parcours</h2><span id="count"></span></div>
+        <div id="routes"></div>
+      </aside>
+      <section class="panel detail">
+        <div id="map"></div>
+        <div id="details" class="details-empty">Sélectionne un parcours pour afficher la trace.</div>
+      </section>
+    </section>
+  </main>
+
+  <footer>
+    Page statique prête pour GitHub Pages — données générées à partir des fichiers GPX.
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="script.js"></script>
+</body>
+</html>
