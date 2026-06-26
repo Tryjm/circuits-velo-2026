@@ -2,23 +2,17 @@
 
 Site statique prêt pour GitHub Pages.
 
-## Version optimisée carte + profil
+## Version visibilité carte
 
-Cette version garde un vrai fond de carte, mais améliore le chargement :
+Cette version conserve les fonds de carte, mais privilégie une carte plus lisible et plus stable :
 
-- fond de carte clair et rapide par défaut ;
-- tuiles 512 px avec zoom réduit pour limiter fortement le nombre de tuiles à charger ;
-- carte plus compacte, adaptée au téléphone ;
-- tracé GPX simplifié directement dans `parcours.json` ;
-- profil altimétrique au-dessus de la carte ;
-- profil visuellement affiné : courbe plus fine, lissée, grille discrète, fond léger ;
-- téléchargement du GPX complet conservé.
+- fond OpenStreetMap standard par défaut, plus contrasté ;
+- carte plus grande pour un vrai aperçu du parcours ;
+- tracé du circuit renforcé avec un liseré blanc pour rester visible sur tous les fonds ;
+- tuiles standard Leaflet, sans réglage 512 px susceptible de provoquer des zones grises ;
+- GPX complets conservés dans le dossier `gpx/` pour téléchargement ;
+- profil altimétrique au-dessus de la carte avec un trait plus fin.
 
-## Fichiers principaux
+## Mise en ligne
 
-- `index.html` : page principale
-- `style.css` : styles responsive
-- `script.js` : logique de recherche, profil et carte
-- `parcours.json` : données calculées et tracés simplifiés
-- `parcours.csv` : export lisible des parcours
-- `gpx/` : fichiers GPX complets à télécharger
+Déposer les fichiers à la racine du dépôt GitHub, puis activer GitHub Pages depuis `main / (root)`.

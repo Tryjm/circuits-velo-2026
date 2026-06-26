@@ -2,6 +2,7 @@ let allRoutes = [];
 let selectedFile = null;
 let map = null;
 let currentLine = null;
+let currentLineHalo = null;
 let startMarker = null;
 let endMarker = null;
 let baseLayerControl = null;
@@ -141,14 +142,12 @@ function selectRoute(file, options={scrollToDetail:false}){
 function createFastTileLayer(){
   return L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
     subdomains: 'abcd',
-    maxZoom: 19,
+    maxZoom: 18,
     maxNativeZoom: 18,
-    tileSize: 512,
-    zoomOffset: -1,
     detectRetina: false,
     updateWhenIdle: true,
     updateWhenZooming: false,
-    keepBuffer: isSmallScreen() ? 0 : 1,
+    keepBuffer: isSmallScreen() ? 1 : 2,
     crossOrigin: true,
     attribution: '&copy; OpenStreetMap &copy; CARTO'
   });
@@ -156,14 +155,12 @@ function createFastTileLayer(){
 
 function createOsmTileLayer(){
   return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+    maxZoom: 18,
     maxNativeZoom: 18,
-    tileSize: 512,
-    zoomOffset: -1,
     detectRetina: false,
     updateWhenIdle: true,
     updateWhenZooming: false,
-    keepBuffer: isSmallScreen() ? 0 : 1,
+    keepBuffer: isSmallScreen() ? 1 : 2,
     crossOrigin: true,
     attribution: '&copy; OpenStreetMap'
   });
@@ -186,19 +183,23 @@ function ensureMap(){
     attributionControl: true
   });
 
-  const fast = createFastTileLayer();
+  map.createPane('routePane');
+  map.getPane('routePane').style.zIndex = 650;
+  map.getPane('routePane').style.pointerEvents = 'none';
+
   const osm = createOsmTileLayer();
-  activeTileLayer = fast.addTo(map);
+  const fast = createFastTileLayer();
+  activeTileLayer = osm.addTo(map);
   watchTileLoading(activeTileLayer);
 
-  baseLayerControl = L.control.layers({ 'Fond clair rapide': fast, 'OpenStreetMap': osm }, null, { position: 'bottomright', collapsed: true }).addTo(map);
+  baseLayerControl = L.control.layers({ 'OpenStreetMap lisible': osm, 'Fond clair léger': fast }, null, { position: 'bottomright', collapsed: true }).addTo(map);
   map.on('baselayerchange', e => {
     activeTileLayer = e.layer;
-    el('mapMode').textContent = e.name === 'OpenStreetMap' ? 'fond OpenStreetMap · tracé simplifié' : 'fond clair rapide · tracé simplifié';
+    el('mapMode').textContent = e.name.includes('OpenStreetMap') ? 'fond OpenStreetMap lisible · tracé simplifié' : 'fond clair léger · tracé simplifié';
     watchTileLoading(activeTileLayer);
   });
 
-  map.setView(DEFAULT_CENTER, 9, {animate:false});
+  map.setView(DEFAULT_CENTER, 10, {animate:false});
   return map;
 }
 
@@ -236,6 +237,7 @@ function updateMap(route){
   m.invalidateSize({animate:false});
 
   if(currentLine) currentLine.remove();
+  if(currentLineHalo) currentLineHalo.remove();
   if(startMarker) startMarker.remove();
   if(endMarker) endMarker.remove();
 
@@ -245,28 +247,38 @@ function updateMap(route){
     return;
   }
 
-  currentLine = L.polyline(pts, {
-    weight: isSmallScreen() ? 3.5 : 4.5,
-    opacity: 0.98,
-    color: '#0b6fae',
+  currentLineHalo = L.polyline(pts, {
+    pane: 'routePane',
+    weight: isSmallScreen() ? 7 : 9,
+    opacity: 0.95,
+    color: '#ffffff',
     lineCap: 'round',
     lineJoin: 'round',
-    smoothFactor: 1.4,
+    smoothFactor: 1.1,
+    interactive: false
+  }).addTo(m);
+
+  currentLine = L.polyline(pts, {
+    pane: 'routePane',
+    weight: isSmallScreen() ? 4 : 5.5,
+    opacity: 1,
+    color: '#005fbd',
+    lineCap: 'round',
+    lineJoin: 'round',
+    smoothFactor: 1.1,
     interactive: false
   }).addTo(m);
 
   const start = pts[0];
   const end = pts[pts.length - 1];
-  startMarker = L.circleMarker(start, {radius: isSmallScreen() ? 4 : 5, weight: 2, color:'#ffffff', fillColor:'#1c8f5a', fillOpacity:1}).addTo(m).bindTooltip('Départ');
-  endMarker = L.circleMarker(end, {radius: isSmallScreen() ? 4 : 5, weight: 2, color:'#ffffff', fillColor:'#c2410c', fillOpacity:1}).addTo(m).bindTooltip('Arrivée');
+  startMarker = L.circleMarker(start, {pane:'routePane', radius: isSmallScreen() ? 5 : 6, weight: 3, color:'#ffffff', fillColor:'#1c8f5a', fillOpacity:1}).addTo(m).bindTooltip('Départ');
+  endMarker = L.circleMarker(end, {pane:'routePane', radius: isSmallScreen() ? 5 : 6, weight: 3, color:'#ffffff', fillColor:'#c2410c', fillOpacity:1}).addTo(m).bindTooltip('Arrivée');
 
-  const maxZoom = isSmallScreen() ? 10 : 11;
-  const bounds = currentLine.getBounds().pad(0.10);
-  m.fitBounds(bounds, {padding:[18,18], maxZoom, animate:false});
-  setTimeout(() => {
-    m.invalidateSize({animate:false});
-    activeTileLayer?.redraw();
-  }, 120);
+  const maxZoom = isSmallScreen() ? 11 : 12;
+  const bounds = currentLine.getBounds().pad(0.08);
+  m.fitBounds(bounds, {padding: isSmallScreen() ? [16,16] : [28,28], maxZoom, animate:false});
+  setTimeout(() => m.invalidateSize({animate:false}), 120);
+  setTimeout(() => m.invalidateSize({animate:false}), 450);
 }
 
 function profileHtml(route){
